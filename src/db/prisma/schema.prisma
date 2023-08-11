@@ -1,0 +1,232 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+
+  // Генерация erd диаграммы
+  // provider = "prisma-erd-generator"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model PostCategory {
+  id    Int    @id @default(autoincrement())
+  slug  String @unique
+  title String
+  posts Post[]
+}
+
+model User {
+  id                String     @id @unique @default(uuid())
+  email             String     @unique
+  password          String
+  profile           Profile?
+  isActivated       Boolean    @default(false)
+  activationLink    String     @default("")
+  resetPasswordLink String?    @unique @default(uuid())
+  roles             UserRole[]
+  token             Token?
+  contactId         Int?
+}
+
+model Token {
+  id           Int     @id @default(autoincrement())
+  ipAddress    String?
+  refreshToken String
+  accessToken  String?
+  user         User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       String  @unique
+}
+
+model Asset {
+  id       String      @id @unique @default(uuid())
+  images   RootImage[]
+  profiles Profile[]
+}
+
+model Profile {
+  id            String         @id @unique @default(uuid())
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId        String         @unique
+  clientProfile ClientProfile?
+  sellerProfile SellerProfile?
+  comments      Comment[]
+  contact       Contact?       @relation(fields: [contactId], references: [id])
+  contactId     Int?
+  posts         Post[]
+  asset         Asset?         @relation(fields: [assetId], references: [id])
+  assetId       String?
+}
+
+model Post {
+  id             Int          @id @default(autoincrement())
+  slug           String       @unique
+  title          String
+  content        String
+  excerpt        String
+  postCategory   PostCategory @relation(fields: [postCategoryId], references: [id])
+  postCategoryId Int
+  rootImage      RootImage?   @relation(fields: [rootImageId], references: [id])
+  rootImageId    Int?
+  stage          PostStage    @default(DRAFT)
+  countOfViews   Int          @default(0)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  profile        Profile?     @relation(fields: [profileId], references: [id])
+  profileId      String?
+}
+
+model ClientProfile {
+  id        String  @id @unique @default(uuid())
+  content   String?
+  avatar    Json?
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId String
+
+  @@unique([profileId])
+}
+
+model SellerProfile {
+  id        String  @id @unique @default(uuid())
+  content   String?
+  avatar    Json?
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId String
+  orders    Order[]
+
+  @@unique([profileId])
+}
+
+model Order {
+  number             Int              @unique @default(autoincrement())
+  id                 String           @id @unique @default(uuid())
+  title              String
+  content            String
+  price              Int
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  sellerProfile      SellerProfile?   @relation(fields: [sellerProfileId], references: [id], onDelete: Cascade)
+  sellerProfileId    String?
+  category           OrderCategory    @relation(fields: [orderCategorySlug], references: [slug])
+  subcategory        OrderSubCategory @relation(fields: [orderSubCategoryId], references: [id])
+  comments           Comment[]
+  contact            Contact?         @relation(fields: [orderContactId], references: [id])
+  images             RootImage[]
+  orderContactId     Int
+  countOfViews       Int              @default(0)
+  isArhivated        Boolean          @default(false)
+  status             OrderStatus
+  city               City             @relation(fields: [cityId], references: [id])
+  cityId             Int
+  orderSubCategoryId String
+  orderCategorySlug  String
+}
+
+model Comment {
+  id   Int    @id @default(autoincrement())
+  text String
+
+  author   Profile @relation(fields: [authorId], references: [id])
+  authorId String
+
+  order   Order  @relation(fields: [orderId], references: [id])
+  orderId String
+
+  parent          Comment? @relation("ChildComments", fields: [parentCommentId], references: [id])
+  parentCommentId Int?
+
+  childComments Comment[] @relation("ChildComments")
+}
+
+model OrderCategory {
+  id            String             @id @unique @default(uuid())
+  name          String             @unique
+  slug          String             @unique
+  subcategories OrderSubCategory[]
+  order         Order[]
+}
+
+model OrderSubCategory {
+  id                String         @id @unique @default(uuid())
+  name              String
+  slug              String
+  orderCategory     OrderCategory? @relation(fields: [orderCategorySlug], references: [slug])
+  orderCategorySlug String?
+  order             Order[]
+
+  @@unique([slug, orderCategorySlug])
+}
+
+model UserRole {
+  id    Int    @id @unique @default(autoincrement())
+  name  String @unique
+  users User[]
+}
+
+model City {
+  id    Int     @id @unique @default(autoincrement())
+  name  String
+  slug  String  @unique
+  order Order[]
+}
+
+model Contact {
+  id       Int       @id @unique @default(autoincrement())
+  phone    String?
+  email    String?
+  telegram String?
+  whatsapp String?
+  orders   Order[]
+  profiles Profile[]
+}
+
+/// Содержит несколько форматов для одного изображения
+model RootImage {
+  id           Int     @id @unique @default(autoincrement())
+  serialNumber Int     @default(autoincrement())
+  images       Image[]
+  orders       Order?  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId      String?
+  posts        Post[]
+  asset        Asset?  @relation(fields: [assetId], references: [id])
+  assetId      String?
+}
+
+model Image {
+  id          Int        @id @unique @default(autoincrement())
+  /// groupId - Общий id для изображений размера: original, thumbnail, small и т.д 
+  groupId     String
+  type        ImageType
+  format      String
+  width       Int
+  height      Int
+  rootImage   RootImage? @relation(fields: [rootImageId], references: [id], onDelete: Cascade)
+  rootImageId Int?
+
+  yandexETag     String
+  yandexLocation String
+  yandexkey      String
+  yandexKey      String
+  yandexBucket   String
+}
+
+enum OrderStatus {
+  START
+  IN_PROGRESS
+  FINISHED
+}
+
+enum ImageType {
+  ORIGINAL
+  THUMBNAIL
+  SMALL
+}
+
+enum PostStage {
+  DRAFT
+  PUBLISHED
+}
